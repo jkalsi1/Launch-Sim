@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import time as t
 import sys
 from math import sqrt
+from numpy import exp
 
 plt.style.use('dark_background')
 
@@ -41,18 +42,32 @@ thrust = [avgThrust if t <= burnTime else 0 for t in time]
 # Generating the mass list
 mass = [(wetMass - t * massFlowRate) if i < index else dryMass for i, t in enumerate(time)]
 
-'''
-    rho = rho_0 * np.exp(-altitude / H)
-    drag = 0.5 * rho * velocity ** 2 * Cd * A if velocity > 0 else 0
-    mass_total = max(mass_empty, mass_total - burn_rate * dt)
-    force_net = thrust - drag - mass_total * g
-    acceleration = force_net / mass_total
-'''
-
 # Generating the acceleration list and taking integrals to get velocity and displacement
+# No drag
 acceleration = [thrust[i] / mass[i] - 9.81 for i in range(len(time))]
 velocity = integrate(time, acceleration)
 displacement = list(map(lambda x : 0 if x < 0 else x, integrate(time, velocity))) # 0 if 'negative val' for displacement
+
+
+# Recalculate for drag after getting a model for displacement
+# Calculate the average velocity during burn time
+avg_velocity_burn = sum(velocity[:index + 1]) / len(velocity[:index + 1])
+
+# Calculate the average altitude during burn time
+avg_altitude_burn = sum(displacement[:index + 1]) / len(displacement[:index + 1])
+
+# Calculate the average air density during burn time
+avg_rho_burn = rho_0 * exp(-avg_altitude_burn / H)
+
+# Calculate the average drag during burn time
+avgDrag = 0.5 * avg_rho_burn * avg_velocity_burn**2 * Cd * A
+
+# Adjust the acceleration to include drag
+acceleration = [(thrust[i] - (0.5 * rho_0 * exp(-displacement[i] / H) * velocity[i]**2 * Cd * A)) / mass[i] - g for i in range(len(time))]
+
+# Recalculate velocity and displacement with drag included
+velocity = integrate(time, acceleration)
+displacement = list(map(lambda x: 0 if x < 0 else x, integrate(time, velocity)))  # 0 if 'negative val' for displacement
 
 apex_idx = displacement.index(max(displacement))
 apex = round(displacement[apex_idx],1)
